@@ -1,6 +1,6 @@
 # test-data
 
-Задание 1: Bash-скрипт для работы с таблицей событий подписок
+## Задание 1: Bash-скрипт для работы с таблицей событий подписок
 
 Описание задачи:
 	1.	Пересоздавать таблицу events, которая хранит информацию о подписках пользователей.
@@ -98,4 +98,77 @@ recreate_table
 insert_data
 export_to_csv
 insert_from_csv
+```
+
+
+## Задание 2: Работа с таблицами операций депозитов и выплат
+
+Описание задачи:
+	1.	Создать две таблицы deposits и withdrawals, содержащие данные о депозитах и снятиях средств пользователей.
+	2.	Вставить тестовые данные в эти таблицы.
+	3.	Создать материализованное представление, которое будет агрегировать суммы депозитов и снятий для каждого пользователя по дням.
+	4.	Объяснить и предложить методы обновления материализованного представления.
+
+1. Создание таблиц
+
+Для создания таблиц deposits и withdrawals в PostgreSQL необходимо выполнить следующий SQL-код:
+
+```
+-- Создаем таблицу deposits
+CREATE TABLE deposits (
+    id INT PRIMARY KEY,
+    user_id INT NOT NULL,
+    amount FLOAT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+
+-- Создаем таблицу withdrawals
+CREATE TABLE withdrawals (
+    id INT PRIMARY KEY,
+    user_id INT NOT NULL,
+    amount FLOAT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+```
+
+2. Вставка данных
+
+
+```
+-- Вставляем данные в таблицу deposits
+INSERT INTO deposits (id, user_id, amount, created_at) VALUES
+(1, 1, 100.0, '2023-01-01 10:00:00'),
+(2, 1, 150.0, '2023-01-02 12:30:00'),
+(3, 2, 200.0, '2023-01-01 11:00:00'),
+(4, 3, 300.5, '2023-01-03 15:45:00');
+
+-- Вставляем данные в таблицу withdrawals
+INSERT INTO withdrawals (id, user_id, amount, created_at) VALUES
+(1, 1, 50.0, '2023-01-01 14:00:00'),
+(2, 2, 100.0, '2023-01-02 10:00:00'),
+(3, 3, 150.5, '2023-01-04 17:15:00');
+```
+
+3. Создание Materialized View
+
+```
+CREATE MATERIALIZED VIEW daily_financial_summary AS
+SELECT
+    d.user_id,
+    DATE(d.created_at) AS operation_day,
+    COALESCE(SUM(d.amount), 0) AS total_deposits,
+    COALESCE(SUM(w.amount), 0) AS total_withdrawals,
+    (COALESCE(SUM(d.amount), 0) - COALESCE(SUM(w.amount), 0)) AS balance_difference
+FROM
+    deposits d
+LEFT JOIN
+    withdrawals w ON d.user_id = w.user_id AND DATE(d.created_at) = DATE(w.created_at)
+GROUP BY
+    d.user_id, DATE(d.created_at);
+```
+
+4. Обновление Materialized View
+
+```
+REFRESH MATERIALIZED VIEW daily_financial_summary;
 ```
