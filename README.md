@@ -11,7 +11,7 @@
 
 Вот bash-скрипт, который реализует пересоздание таблицы, экспорт в CSV и импорт из CSV:
 
-```
+```bash
 #!/bin/bash
 
 # Настройки базы данных
@@ -113,7 +113,7 @@ insert_from_csv
 
 Для создания таблиц deposits и withdrawals в PostgreSQL необходимо выполнить следующий SQL-код:
 
-```
+```sql
 -- Создаем таблицу deposits
 CREATE TABLE deposits (
     id INT PRIMARY KEY,
@@ -134,7 +134,7 @@ CREATE TABLE withdrawals (
 2. Вставка данных
 
 
-```
+```sql
 -- Вставляем данные в таблицу deposits
 INSERT INTO deposits (id, user_id, amount, created_at) VALUES
 (1, 1, 100.0, '2023-01-01 10:00:00'),
@@ -151,7 +151,7 @@ INSERT INTO withdrawals (id, user_id, amount, created_at) VALUES
 
 3. Создание Materialized View
 
-```
+```sql
 CREATE MATERIALIZED VIEW daily_financial_summary AS
 SELECT
     d.user_id,
@@ -169,6 +169,6 @@ GROUP BY
 
 4. Обновление Materialized View
 
-```
+```sql
 REFRESH MATERIALIZED VIEW daily_financial_summary;
 ```
