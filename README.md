@@ -172,3 +172,77 @@ GROUP BY
 ```sql
 REFRESH MATERIALIZED VIEW daily_financial_summary;
 ```
+
+## Задание 3:
+
+```bash
+#!/bin/bash
+
+# Параметры подключения к базе данных
+DB_NAME="your_db_name"
+DB_USER="your_db_user"
+DB_PASS="your_db_password"
+DB_HOST="localhost"
+DB_PORT="5432"
+CSV_FILE="diagnostics.csv"
+
+# Шаг 1: Создание таблицы station_errors, если она еще не существует
+PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME <<EOF
+CREATE TABLE IF NOT EXISTS station_errors (
+    id INT PRIMARY KEY,
+    date DATE NOT NULL,
+    station VARCHAR(50) NOT NULL,
+    msg VARCHAR(255) NOT NULL,
+    status VARCHAR(50)
+);
+EOF
+
+# Шаг 2: Создание временной таблицы для загрузки данных из CSV
+PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME <<EOF
+DROP TABLE IF EXISTS temp_station_errors;
+CREATE TABLE temp_station_errors (
+    id INT,
+    date DATE,
+    station VARCHAR(50),
+    msg VARCHAR(255)
+);
+\copy temp_station_errors(id, date, station, msg) FROM '$CSV_FILE' WITH CSV HEADER;
+EOF
+
+# Шаг 3: Перенос данных из временной таблицы в таблицу station_errors, игнорируя "not finished"
+PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME <<EOF
+INSERT INTO station_errors (id, date, station, msg, status)
+SELECT id, date, station, msg, NULL
+FROM temp_station_errors
+WHERE msg != 'not finished';
+EOF
+
+# Шаг 4: Присвоение статусов ошибкам (new, serious, critical)
+PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME <<EOF
+WITH ranked_errors AS (
+    SELECT 
+        id, 
+        date, 
+        station, 
+        msg,
+        LAG(date) OVER (PARTITION BY station ORDER BY date) AS prev_date,
+        ROW_NUMBER() OVER (PARTITION BY station ORDER BY date) AS error_rank
+    FROM 
+        station_errors
+)
+UPDATE station_errors se
+SET status = CASE
+    -- Если не было предыдущей ошибки или прошло больше 1 дня - статус new
+    WHEN ranked_errors.prev_date IS NULL OR ranked_errors.date - ranked_errors.prev_date > 1 THEN 'new'
+    -- Если ошибка второй день подряд - serious
+    WHEN ranked_errors.date - ranked_errors.prev_date = 1 AND ranked_errors.error_rank = 2 THEN 'serious'
+    -- Если ошибка 3 и более дней подряд - critical
+    WHEN ranked_errors.date - ranked_errors.prev_date = 1 AND ranked_errors.error_rank >= 3 THEN 'critical'
+    ELSE 'new'
+END
+FROM ranked_errors
+WHERE se.id = ranked_errors.id;
+EOF
+
+echo "Данные успешно загружены и статусы присвоены."
+```
